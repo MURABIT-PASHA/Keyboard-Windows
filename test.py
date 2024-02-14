@@ -9,6 +9,7 @@ import qrcode
 from PyQt5 import QtWidgets, QtGui
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QApplication
+from plyer import notification
 
 PORT = 7800
 connected_devices = set()
@@ -35,7 +36,7 @@ def create_qr_code():
     qr.make(fit=True)
 
     img = qr.make_image(fill_color="black", back_color="white")
-    img.save('qr_code.png')
+    img.save('./qr_code.png')
 
 
 class QRCodeDialog(QDialog):
@@ -46,7 +47,7 @@ class QRCodeDialog(QDialog):
         layout = QVBoxLayout()
 
         self.qr_label = QLabel(self)
-        pixmap = QPixmap('qr_code.png')
+        pixmap = QPixmap('./qr_code.png')
         self.qr_label.setPixmap(pixmap)
 
         layout.addWidget(self.qr_label)
@@ -86,7 +87,7 @@ def foreground_process():
     app = QtWidgets.QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     w = QtWidgets.QWidget()
-    tray_icon = SystemTrayIcon(QtGui.QIcon("icon.png"), w)
+    tray_icon = SystemTrayIcon(QtGui.QIcon("./icon.png"), w)
     tray_icon.show()
     sys.exit(app.exec_())
 
@@ -124,8 +125,13 @@ def process_message(msg):
         order_type = message["orderType"]
 
         if order_type == "connect":
-            # TODO: If dialog opened then dismiss dialog
-            pass
+            notification.notify(
+                app_name='Keyboard',
+                title='Cihaz Bağlandı',
+                message='Android cihazınız başarıyla bağlandı',
+                app_icon='./icon.ico',
+                timeout=10,
+            )
         elif order_type == "type" and message["message"] is not None:
             try:
                 keyboard.press_and_release(message["message"])
@@ -135,9 +141,21 @@ def process_message(msg):
                 keyboard.press_and_release('ctrl+v')
                 time.sleep(0.1)
         else:
-            print("Tanımlanamayan mesaj türü.")
+            notification.notify(
+                app_name='Keyboard',
+                title='Hata',
+                message='Tanımlanamayan mesaj türü',
+                app_icon='./icon.ico',
+                timeout=5,
+            )
     except json.JSONDecodeError:
-        print("Gelen mesaj JSON formatında değil.")
+        notification.notify(
+            app_name='Keyboard',
+            title='Hata',
+            message='Gelen mesaj Json formatında değil.\nFarklı bir kaynak bağlanmaya çalışıyor olabilir',
+            app_icon='./icon.ico',
+            timeout=5,
+        )
 
 
 if __name__ == '__main__':
