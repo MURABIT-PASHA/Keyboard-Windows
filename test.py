@@ -1,15 +1,27 @@
 import json
+import os
 import sys
 import socket
 import threading
 import time
+import traceback
+from pathlib import Path
+
 import keyboard
 import pyperclip
 import qrcode
 from PyQt5 import QtWidgets, QtGui
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QApplication
-from plyer import notification
+from win10toast import ToastNotifier
+
+import resources
+
+QR_IMAGE_NAME = "qrcode.png"
+APP_DATA_LOCAL = os.getenv('LOCALAPPDATA')
+FOLDER_NAME = "keyboard"
+
+IMAGE_PATH = Path(APP_DATA_LOCAL) / FOLDER_NAME
 
 PORT = 7800
 connected_devices = set()
@@ -36,18 +48,21 @@ def create_qr_code():
     qr.make(fit=True)
 
     img = qr.make_image(fill_color="black", back_color="white")
-    img.save('./qr_code.png')
+
+    IMAGE_PATH.mkdir(parents=True, exist_ok=True)
+    img.save(f"{Path(APP_DATA_LOCAL)}/{FOLDER_NAME}/{QR_IMAGE_NAME}")
 
 
 class QRCodeDialog(QDialog):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("QR Kodu")
+        self.setWindowIcon(QtGui.QIcon(":icon_png"))
         self.setGeometry(100, 100, 200, 200)
         layout = QVBoxLayout()
 
         self.qr_label = QLabel(self)
-        pixmap = QPixmap('./qr_code.png')
+        pixmap = QPixmap(f"{Path(APP_DATA_LOCAL)}/{FOLDER_NAME}/{QR_IMAGE_NAME}")
         self.qr_label.setPixmap(pixmap)
 
         layout.addWidget(self.qr_label)
@@ -55,6 +70,7 @@ class QRCodeDialog(QDialog):
         screen_geometry = QApplication.desktop().screenGeometry()
         self.move(screen_geometry.width() - 350,
                   screen_geometry.height() - 350)
+
 
 class SystemTrayIcon(QtWidgets.QSystemTrayIcon):
     def __init__(self, icon, parent=None):
@@ -87,9 +103,10 @@ def foreground_process():
     app = QtWidgets.QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     w = QtWidgets.QWidget()
-    tray_icon = SystemTrayIcon(QtGui.QIcon("./icon.png"), w)
+    tray_icon = SystemTrayIcon(QtGui.QIcon(":icon_png"), w)
     tray_icon.show()
     sys.exit(app.exec_())
+
 
 def main():
     background_process()
@@ -125,13 +142,15 @@ def process_message(msg):
         order_type = message["orderType"]
 
         if order_type == "connect":
-            notification.notify(
-                app_name='Keyboard',
-                title='Cihaz Bağlandı',
-                message='Android cihazınız başarıyla bağlandı',
-                app_icon='./icon.ico',
-                timeout=10,
-            )
+            try:
+                toaster = ToastNotifier()
+                toaster.show_toast("Cihaz Bağlandı",
+                                   "Android cihazınız başarıyla bağlandı",
+                                   icon_path="icon.ico",
+                                   duration=10)
+            except Exception:
+                with open("log.txt", "a") as log_file:
+                    log_file.write(traceback.format_exc())
         elif order_type == "type" and message["message"] is not None:
             try:
                 keyboard.press_and_release(message["message"])
@@ -141,21 +160,18 @@ def process_message(msg):
                 keyboard.press_and_release('ctrl+v')
                 time.sleep(0.1)
         else:
-            notification.notify(
-                app_name='Keyboard',
-                title='Hata',
-                message='Tanımlanamayan mesaj türü',
-                app_icon='./icon.ico',
-                timeout=5,
-            )
+            toaster = ToastNotifier()
+            toaster.show_toast("Hata",
+                               "Tanımlanamayan mesaj türü",
+                               icon_path="icon.ico",
+                               duration=5)
     except json.JSONDecodeError:
-        notification.notify(
-            app_name='Keyboard',
-            title='Hata',
-            message='Gelen mesaj Json formatında değil.\nFarklı bir kaynak bağlanmaya çalışıyor olabilir',
-            app_icon='./icon.ico',
-            timeout=5,
-        )
+
+        toaster = ToastNotifier()
+        toaster.show_toast("Hata",
+                           "Gelen mesaj Json formatında değil.\nFarklı bir kaynak bağlanmaya çalışıyor olabilir",
+                           icon_path="icon.ico",
+                           duration=5)
 
 
 if __name__ == '__main__':
